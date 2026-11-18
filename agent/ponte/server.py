@@ -50,6 +50,7 @@ class Session:
         self.ws = ws
         self.streaming = False
         self.pending: dict[str, dict] = {}   # ações aguardando confirmação
+        self.waiters: dict[str, asyncio.Future] = {}  # confirmações pedidas pelo LLM
         self.lock = asyncio.Lock()
 
     async def send(self, msg: dict):
@@ -105,9 +106,24 @@ class Session:
 
             async def notify(m):
                 await self.send(m)
-            text = await run_goal(params["goal"], CFG, notify)
+            text = await run_goal(params["goal"], CFG, notify, self.ask_confirm)
             return {"ok": True, "summary": text}
         raise ValueError(f"ação desconhecida: {a}")
+
+    async def ask_confirm(self, action: str, params: dict, timeout: int = 120) -> bool:
+        """Pergunta no celular e espera a resposta (usado pelo LLM antes de rodar comandos)."""
+        ref = uuid.uuid4().hex[:8]
+        fut = asyncio.get_running_loop().create_future()
+        self.waiters[ref] = fut
+        await self.send({"type": "confirm_request", "ref": ref, "action": action, "params": params})
+        try:
+            ok = await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            ok = False
+        finally:
+            self.waiters.pop(ref, None)
+        audit({"event": "confirm", "action": action, "params": params, "ok": ok})
+        return ok
 
     async def handle(self, msg: dict):
         kind = msg.get("type")
@@ -120,6 +136,10 @@ class Session:
             return
 
         if kind == "confirm":
+            fut = self.waiters.get(msg.get("ref"))
+            if fut and not fut.done():
+                fut.set_result(bool(msg.get("ok")))
+                return
             pend = self.pending.pop(msg.get("ref"), None)
             if pend and msg.get("ok"):
                 await self.run_and_reply(pend["id"], pend["action"], pend["params"])
@@ -128,7 +148,8 @@ class Session:
             return
 
         if kind == "voice":  # texto vindo do reconhecimento de voz do celular
-            parsed = intents.parse(msg["text"])
+            parsed = intents.parse(msg["text"]) if CFG.get("fast_rules", True) \
+                else {"action": "agent", "params": {"goal": msg["text"]}}
             action, params = parsed["action"], parsed["params"]
             await self.send({"type": "parsed", "id": rid, "action": action, "params": params})
         elif kind == "action":

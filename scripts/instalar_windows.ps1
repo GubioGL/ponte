@@ -22,7 +22,26 @@ if (-not (Test-Path "$venv\Scripts\python.exe")) {
 & "$venv\Scripts\python.exe" -m pip install -e "$root\agent[ia]"
 if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar as dependencias (veja o erro acima)." }
 
-# 3. Inicio automatico: atalho na pasta Inicializar do usuario (sem admin)
+# 3. Cerebro gratis e local: Ollama + modelo (escolhido pela memoria RAM do PC)
+$ramGB = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
+$model = if ($ramGB -ge 14) { "qwen3:8b" } else { "qwen3:4b" }
+$resp = Read-Host "Instalar o cerebro de IA gratis (Ollama + $model, ~3-5 GB de download)? [S/n]"
+if ($resp -notmatch '^[nN]') {
+    if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install --id Ollama.Ollama -e --accept-source-agreements --accept-package-agreements
+            $env:Path += ";$env:LOCALAPPDATA\Programs\Ollama"
+        } else {
+            Write-Host "Baixe e instale o Ollama em https://ollama.com/download e rode este script de novo."
+        }
+    }
+    if (Get-Command ollama -ErrorAction SilentlyContinue) {
+        ollama pull $model
+        & "$venv\Scripts\python.exe" -c "from ponte import config; c=config.load(); c['llm']['provider']='ollama'; c['llm']['model']='$model'; config.save(c); print('LLM configurado:', '$model')"
+    }
+}
+
+# 4. Inicio automatico: atalho na pasta Inicializar do usuario (sem admin)
 $startup = [Environment]::GetFolderPath("Startup")
 $lnk = Join-Path $startup "Ponte.lnk"
 $sh = New-Object -ComObject WScript.Shell
@@ -32,7 +51,7 @@ $s.Arguments = "-m ponte.server"
 $s.WorkingDirectory = "$env:USERPROFILE\.ponte"
 $s.Save()
 
-# 4. Inicia agora em segundo plano (se ja nao estiver rodando)
+# 5. Inicia agora em segundo plano (se ja nao estiver rodando)
 $running = Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -like "*ponte.server*" }
 if (-not $running) { Start-Process "$venv\Scripts\pythonw.exe" -ArgumentList "-m ponte.server" -WindowStyle Hidden }
 

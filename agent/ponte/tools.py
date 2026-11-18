@@ -115,10 +115,16 @@ def hotkey(keys: list[str]) -> dict:
 
 
 # ---------------------------------------------------------------- sistema
-def shell(command: str, timeout: int = 60) -> dict:
-    """Executa um comando no shell do sistema e devolve a saída."""
-    p = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout,
-                       encoding="utf-8", errors="replace")
+def shell(command: str, timeout: int = 120) -> dict:
+    """Executa um comando (PowerShell no Windows, bash/zsh no Linux/macOS) e devolve a saída."""
+    if OS == "win":
+        args = ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+                "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + command]
+        p = subprocess.run(args, capture_output=True, text=True, timeout=timeout,
+                           encoding="utf-8", errors="replace", creationflags=0x08000000)  # sem janela
+    else:
+        p = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout,
+                           encoding="utf-8", errors="replace")
     return {"code": p.returncode, "stdout": p.stdout[-8000:], "stderr": p.stderr[-4000:]}
 
 

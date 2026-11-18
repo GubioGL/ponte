@@ -44,7 +44,7 @@
   <!-- VOZ -->
   <section id="t-voz" class="act">
     <button class="mic" id="mic">🎤</button>
-    <p class="hint" style="text-align:center" id="micHint">Toque e fale: "abrir chrome", "pesquisar receita de bolo", "pausar música"… Qualquer outra frase vai para a IA.</p>
+    <p class="hint" style="text-align:center" id="micHint">Toque e fale. Ex.: "abrir chrome", "pausar música", ou peça qualquer coisa: "quanto espaço livre tem no disco?", "cria uma pasta Projetos na área de trabalho".</p>
     <div class="row"><input id="cmd" placeholder="ou digite um comando"><button class="btn p" id="send">Enviar</button></div>
     <div id="log"></div>
   </section>
@@ -126,14 +126,22 @@ function connect() {
     const m = JSON.parse(e.data);
     if (m.type === "hello") $("#pcinfo").textContent = m.info.os.split("-")[0] + " · " + m.info.screen.join("×");
     else if (m.type === "parsed") log(`→ ${m.action} ${JSON.stringify(m.params)}`);
-    else if (m.type === "agent_step") log(`🤖 passo ${m.step}: ${m.tool} ${JSON.stringify(m.input)}`);
+    else if (m.type === "agent_step") log(m.step === 0 ? `🤖 pensando (${m.input.llm})…` : `🤖 passo ${m.step}: ${m.tool} ${m.input.explanation || JSON.stringify(m.input)}`);
     else if (m.type === "confirm_request") ask(m);
+    else if (m.type === "result" && m.ok && m.action === "agent") { log(`🤖 ${m.data.summary}`, "s"); speak(m.data.summary); }
     else if (m.type === "result") m.ok ? log(`✓ ${m.action}: ${JSON.stringify(m.data).slice(0,400)}`, "s") : log(`✗ ${m.error}`, "e");
   };
 }
 
+function speak(t) {  // resposta falada pelo próprio celular
+  try { const u = new SpeechSynthesisUtterance(t); u.lang = "pt-BR"; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+}
 function ask(m) {
-  $("#dlgBody").textContent = `${m.action}\n${JSON.stringify(m.params, null, 2)}`;
+  if (m.action === "run_command")
+    $("#dlgBody").textContent = `🤖 A IA quer rodar um comando:\n\n${m.params.o_que_faz || ""}\n\n$ ${m.params.comando}`;
+  else
+    $("#dlgBody").textContent = `${m.action}\n${JSON.stringify(m.params, null, 2)}`;
+  if (navigator.vibrate) navigator.vibrate(150);
   $("#dlg").showModal();
   $("#dlgYes").onclick = () => { send({type:"confirm", ref:m.ref, ok:true}); $("#dlg").close(); };
   $("#dlgNo").onclick  = () => { send({type:"confirm", ref:m.ref, ok:false}); $("#dlg").close(); };

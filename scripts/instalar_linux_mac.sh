@@ -8,6 +8,19 @@ VENV="$HOME/.ponte/venv"
 python3 -m venv "$VENV"
 "$VENV/bin/pip" install -e "$ROOT/agent[ia]"
 
+# Cérebro grátis e local: Ollama + modelo
+read -r -p "Instalar o cérebro de IA grátis (Ollama + qwen3, ~3-5 GB)? [S/n] " RESP || RESP=s
+if [[ ! "$RESP" =~ ^[nN] ]]; then
+  if ! command -v ollama >/dev/null; then
+    if [[ "$(uname)" == "Darwin" ]] && command -v brew >/dev/null; then brew install ollama && brew services start ollama
+    else curl -fsSL https://ollama.com/install.sh | sh; fi
+  fi
+  MEM_GB=$("$VENV/bin/python" -c "import psutil; print(round(psutil.virtual_memory().total/2**30))")
+  MODEL=$([[ $MEM_GB -ge 14 ]] && echo qwen3:8b || echo qwen3:4b)
+  ollama pull "$MODEL"
+  "$VENV/bin/python" -c "from ponte import config; c=config.load(); c['llm']['model']='$MODEL'; config.save(c)"
+fi
+
 if [[ "$(uname)" == "Darwin" ]]; then
   PLIST="$HOME/Library/LaunchAgents/com.ponte.agent.plist"
   cat > "$PLIST" <<PL
