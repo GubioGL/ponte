@@ -49,11 +49,17 @@ No **Linux / macOS**:
 ```bash
 ./scripts/instalar_linux_mac.sh
 ```
-O instalador configura o Ponte para iniciar sozinho junto com o computador.
+O instalador não precisa de administrador. Ele deixa o Ponte rodando em segundo plano e configurado para iniciar sozinho com o computador.
+
+Para ver o link e o QR code do celular a qualquer momento:
+```bash
+%USERPROFILE%\.ponte\venv\Scripts\python.exe -m ponte.link
+```
+(No Linux/macOS: `~/.ponte/venv/bin/python -m ponte.link`.)
 
 **2. Conectar o celular**
 
-- **Na mesma rede Wi-Fi:** rode `ponte` no PC e escaneie o QR code com o celular.
+- **Na mesma rede Wi-Fi:** escaneie com o celular o QR code mostrado pelo `ponte.link`.
 - **Pela internet, de qualquer lugar:** instale o [Tailscale](https://tailscale.com/download) no PC e no celular, com a mesma conta. Depois rode no PC:
   ```bash
   tailscale serve --bg 8765

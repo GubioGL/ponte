@@ -43,4 +43,4 @@ SV
   systemctl --user enable --now ponte.service
   echo "Linux: em Wayland o controle de mouse/tela é limitado; use uma sessão X11 (Xorg)."
 fi
-echo "Instalado. QR code / link: rode '$VENV/bin/ponte' uma vez, ou veja o token em ~/.ponte/config.json"
+echo "Instalado. Para ver o link e o QR code do celular: $VENV/bin/python -m ponte.link"

@@ -184,12 +184,10 @@ def _local_ips() -> list[str]:
     return sorted(i for i in ips if not i.startswith("127."))
 
 
-def main():
-    import uvicorn
-
+def print_link():
+    """Mostra o link (com token) e o QR code para abrir no celular."""
     urls = [f"http://{ip}:{CFG['port']}/#token={CFG['token']}" for ip in _local_ips()] or \
            [f"http://<IP-DO-PC>:{CFG['port']}/#token={CFG['token']}"]
-    print("\n=== PONTE rodando ===")
     for u in urls:
         print("  Abra no celular:", u)
     try:
@@ -199,7 +197,19 @@ def main():
         qr.print_ascii(invert=True)
     except Exception:
         pass
-    print("Dica: com Tailscale, use o IP 100.x.y.z para acessar de qualquer lugar.\n")
+    print("Dica: com Tailscale, use o IP 100.x.y.z (ou o endereco https do 'tailscale serve').\n")
+
+
+def main():
+    import sys
+    import uvicorn
+
+    if sys.stdout is None or sys.stderr is None:
+        # pythonw (segundo plano) não tem console: manda a saída para ~/.ponte/ponte.log
+        log = open(config.HOME / "ponte.log", "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = log
+    print("\n=== PONTE rodando ===")
+    print_link()
     uvicorn.run(app, host=CFG["host"], port=CFG["port"], log_level="warning")
 
 
