@@ -1,0 +1,207 @@
+"""Servidor do Ponte: roda em segundo plano no PC.
+
+- GET  /            -> app web (PWA) para o celular
+- WS   /ws?token=   -> canal de comandos (JSON) + stream da tela (frames JPEG binários)
+
+Iniciar:  python -m ponte.server
+"""
+from __future__ import annotations
+
+import asyncio
+import hmac
+import json
+import socket
+import time
+import uuid
+from pathlib import Path
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from . import config, intents, tools
+
+CFG = config.load()
+STATIC = Path(__file__).parent / "static"
+app = FastAPI(title="Ponte")
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+
+def audit(entry: dict) -> None:
+    entry["ts"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    with open(config.AUDIT_LOG, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+@app.get("/")
+def index():
+    return FileResponse(STATIC / "index.html")
+
+
+@app.get("/manifest.json")
+def manifest():
+    return FileResponse(STATIC / "manifest.json")
+
+
+class Session:
+    """Uma conexão do celular."""
+
+    def __init__(self, ws: WebSocket):
+        self.ws = ws
+        self.streaming = False
+        self.pending: dict[str, dict] = {}   # ações aguardando confirmação
+        self.lock = asyncio.Lock()
+
+    async def send(self, msg: dict):
+        async with self.lock:
+            await self.ws.send_text(json.dumps(msg, ensure_ascii=False, default=str))
+
+    async def send_frame(self, data: bytes):
+        async with self.lock:
+            await self.ws.send_bytes(data)
+
+    # ------------------------------------------------------------- stream de tela
+    async def stream_loop(self):
+        interval = 1 / max(1, CFG["screen_fps"])
+        while self.streaming:
+            t0 = time.monotonic()
+            jpeg, _ = await asyncio.to_thread(tools.screenshot_jpeg, CFG["screen_max_width"], CFG["screen_quality"])
+            await self.send_frame(jpeg)
+            await asyncio.sleep(max(0, interval - (time.monotonic() - t0)))
+
+    # ------------------------------------------------------------- execução
+    async def execute(self, action: str, params: dict) -> dict:
+        audit({"action": action, "params": params})
+        a = action
+        if a == "open":
+            return await asyncio.to_thread(tools.open_target, params["target"], CFG["apps"])
+        if a == "type":
+            return await asyncio.to_thread(tools.type_text, params["text"])
+        if a == "hotkey":
+            return await asyncio.to_thread(tools.hotkey, [k.strip() for k in params["keys"]])
+        if a == "click":
+            return await asyncio.to_thread(tools.click, params["x"], params["y"],
+                                           params.get("button", "left"), params.get("double", False))
+        if a == "click_here":
+            return await asyncio.to_thread(tools.click_here, params.get("button", "left"))
+        if a == "move":
+            return await asyncio.to_thread(tools.move, params["dx"], params["dy"])
+        if a == "scroll":
+            return await asyncio.to_thread(tools.scroll, params["amount"])
+        if a == "media":
+            return await asyncio.to_thread(tools.media, params["action"])
+        if a == "lock":
+            return await asyncio.to_thread(tools.lock_screen)
+        if a == "kill":
+            return await asyncio.to_thread(tools.kill, params["name_or_pid"])
+        if a == "sysinfo":
+            return await asyncio.to_thread(tools.system_info)
+        if a == "processes":
+            return await asyncio.to_thread(tools.processes)
+        if a == "shell":
+            return await asyncio.to_thread(tools.shell, params["command"])
+        if a == "agent":
+            from .planner import run_goal
+
+            async def notify(m):
+                await self.send(m)
+            text = await run_goal(params["goal"], CFG, notify)
+            return {"ok": True, "summary": text}
+        raise ValueError(f"ação desconhecida: {a}")
+
+    async def handle(self, msg: dict):
+        kind = msg.get("type")
+        rid = msg.get("id")
+
+        if kind == "stream":
+            self.streaming = bool(msg.get("on"))
+            if self.streaming:
+                asyncio.create_task(self.stream_loop())
+            return
+
+        if kind == "confirm":
+            pend = self.pending.pop(msg.get("ref"), None)
+            if pend and msg.get("ok"):
+                await self.run_and_reply(pend["id"], pend["action"], pend["params"])
+            elif pend:
+                await self.send({"type": "result", "id": pend["id"], "ok": False, "error": "cancelado"})
+            return
+
+        if kind == "voice":  # texto vindo do reconhecimento de voz do celular
+            parsed = intents.parse(msg["text"])
+            action, params = parsed["action"], parsed["params"]
+            await self.send({"type": "parsed", "id": rid, "action": action, "params": params})
+        elif kind == "action":
+            action, params = msg["action"], msg.get("params", {})
+        else:
+            return
+
+        if action in CFG["require_confirm"] and not msg.get("confirmed"):
+            ref = uuid.uuid4().hex[:8]
+            self.pending[ref] = {"id": rid, "action": action, "params": params}
+            await self.send({"type": "confirm_request", "ref": ref, "action": action, "params": params})
+            return
+        await self.run_and_reply(rid, action, params)
+
+    async def run_and_reply(self, rid, action, params):
+        async def job():
+            try:
+                out = await self.execute(action, params)
+                await self.send({"type": "result", "id": rid, "ok": True, "action": action, "data": out})
+            except Exception as e:
+                await self.send({"type": "result", "id": rid, "ok": False, "action": action, "error": str(e)})
+        asyncio.create_task(job())  # não bloqueia: mouse/stream seguem responsivos durante o agente
+
+
+@app.websocket("/ws")
+async def ws_endpoint(ws: WebSocket):
+    token = ws.query_params.get("token", "")
+    if not hmac.compare_digest(token, CFG["token"]):
+        await ws.close(code=4401)
+        audit({"event": "auth_fail", "ip": ws.client.host if ws.client else None})
+        return
+    await ws.accept()
+    s = Session(ws)
+    audit({"event": "connect", "ip": ws.client.host if ws.client else None})
+    await s.send({"type": "hello", "info": await asyncio.to_thread(tools.system_info)})
+    try:
+        while True:
+            await s.handle(json.loads(await ws.receive_text()))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        s.streaming = False
+        audit({"event": "disconnect"})
+
+
+def _local_ips() -> list[str]:
+    ips = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except OSError:
+        pass
+    return sorted(i for i in ips if not i.startswith("127."))
+
+
+def main():
+    import uvicorn
+
+    urls = [f"http://{ip}:{CFG['port']}/#token={CFG['token']}" for ip in _local_ips()] or \
+           [f"http://<IP-DO-PC>:{CFG['port']}/#token={CFG['token']}"]
+    print("\n=== PONTE rodando ===")
+    for u in urls:
+        print("  Abra no celular:", u)
+    try:
+        import qrcode
+        qr = qrcode.QRCode(border=1)
+        qr.add_data(urls[0])
+        qr.print_ascii(invert=True)
+    except Exception:
+        pass
+    print("Dica: com Tailscale, use o IP 100.x.y.z para acessar de qualquer lugar.\n")
+    uvicorn.run(app, host=CFG["host"], port=CFG["port"], log_level="warning")
+
+
+if __name__ == "__main__":
+    main()
