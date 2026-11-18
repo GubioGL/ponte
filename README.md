@@ -69,6 +69,16 @@ Para ver o link e o QR code do celular a qualquer momento:
 
 **3. Cérebro de IA (grátis).** O instalador pergunta se você quer instalar o [Ollama](https://ollama.com), que roda o modelo de IA **no seu próprio PC**: é de graça, funciona sem internet e nada sai do computador. Ele escolhe o modelo pela memória do PC (`qwen3:8b` com 16 GB de RAM, `qwen3:4b` com menos).
 
+## 💻 Usar a voz no próprio PC (sem celular)
+
+O instalador cria o atalho **"Ponte - Voz"** na área de trabalho. Ele abre o Ponte numa janelinha que usa o **microfone do computador**.
+
+1. Clique duas vezes em **Ponte - Voz**. Na primeira vez, permita o microfone.
+2. Aperte **ESPAÇO** (ou **F2**, ou clique no 🎤) e fale o comando.
+3. Comandos que digitam ou apertam teclas vão para a **janela que você estava usando antes**: o Ponte volta para ela sozinho com Alt+Tab.
+
+Também dá para abrir pelo terminal: `python -m ponte.abrir`. Para desligar a volta automática de janela, use `"local_refocus": false` no config.
+
 ## 🗣 Exemplos de comandos
 
 | Você fala | O PC faz |

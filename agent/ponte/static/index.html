@@ -178,6 +178,16 @@ if (SR) {
   $("#mic").onclick = () => $("#cmd").focus();
 }
 
+// ---- no próprio PC: barra de espaço (ou F2) = falar
+const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+if (LOCAL) {
+  $("#micHint").textContent = "Modo PC: aperte ESPAÇO (ou clique no 🎤) e fale. Comandos de digitar/teclas vão para a janela que você estava usando antes.";
+  document.addEventListener("keydown", e => {
+    const typing = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+    if ((e.key === " " && !typing) || e.key === "F2") { e.preventDefault(); $("#mic").click(); }
+  });
+}
+
 // ---- tela ao vivo + toque
 $("#streamBtn").onclick = () => { streaming = !streaming; send({type:"stream", on:streaming}); $("#streamBtn").textContent = streaming ? "⏸ Parar" : "▶ Ver tela"; };
 $("#modeBtn").onclick = () => {

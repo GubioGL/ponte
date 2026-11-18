@@ -49,6 +49,10 @@ class Session:
     def __init__(self, ws: WebSocket):
         self.ws = ws
         self.streaming = False
+        # aberto no próprio PC (atalho "Ponte - Voz"): a janela do Ponte fica com o foco,
+        # então antes de digitar/teclar voltamos para a janela que você estava usando
+        self.local = bool(ws.client and ws.client.host in ("127.0.0.1", "::1")
+                          and "x-forwarded-for" not in ws.headers)  # tailscale serve = celular
         self.pending: dict[str, dict] = {}   # ações aguardando confirmação
         self.waiters: dict[str, asyncio.Future] = {}  # confirmações pedidas pelo LLM
         self.lock = asyncio.Lock()
@@ -73,6 +77,10 @@ class Session:
     # ------------------------------------------------------------- execução
     async def execute(self, action: str, params: dict) -> dict:
         audit({"action": action, "params": params})
+        if self.local and action in ("type", "hotkey", "scroll", "click_here", "agent") \
+                and CFG.get("local_refocus", True):
+            await asyncio.to_thread(tools.hotkey, ["alt", "tab"])
+            await asyncio.sleep(0.4)
         a = action
         if a == "open":
             return await asyncio.to_thread(tools.open_target, params["target"], CFG["apps"])
@@ -211,6 +219,7 @@ def print_link():
     scheme = "https" if CFG.get("https_port") else "http"
     urls = [f"{scheme}://{ip}:{port}/#token={CFG['token']}" for ip in _local_ips()] or \
            [f"{scheme}://<IP-DO-PC>:{port}/#token={CFG['token']}"]
+    print(f"  No proprio PC (voz pelo microfone do PC): http://localhost:{CFG['port']}/#token={CFG['token']}")
     for u in urls:
         print("  Abra no celular:", u)
     if scheme == "https":

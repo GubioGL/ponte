@@ -51,6 +51,14 @@ $s.Arguments = "-m ponte.server"
 $s.WorkingDirectory = "$env:USERPROFILE\.ponte"
 $s.Save()
 
+# Atalho na area de trabalho: "Ponte - Voz" (comandos de voz pelo microfone do proprio PC)
+$desk = [Environment]::GetFolderPath("Desktop")
+$v = $sh.CreateShortcut((Join-Path $desk "Ponte - Voz.lnk"))
+$v.TargetPath = "$venv\Scripts\pythonw.exe"
+$v.Arguments = "-m ponte.abrir"
+$v.IconLocation = "$env:SystemRoot\System32\SndVol.exe,0"
+$v.Save()
+
 # 5. Inicia agora em segundo plano (se ja nao estiver rodando)
 $running = Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -like "*ponte.server*" }
 if (-not $running) { Start-Process "$venv\Scripts\pythonw.exe" -ArgumentList "-m ponte.server" -WindowStyle Hidden }
@@ -59,4 +67,5 @@ Write-Host ""
 Write-Host "Ponte instalado e rodando em segundo plano. Ele inicia sozinho quando voce liga o PC."
 Write-Host "Para ver o link e o QR code do celular, rode:"
 Write-Host "  $venv\Scripts\python.exe -m ponte.link"
+Write-Host "Para dar comandos de voz no proprio PC: clique duas vezes em 'Ponte - Voz' na area de trabalho."
 Write-Host "Para desinstalar o inicio automatico, apague: $lnk"
