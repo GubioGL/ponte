@@ -9,7 +9,8 @@ AUDIT_LOG = HOME / "audit.log"
 
 DEFAULTS = {
     "host": "0.0.0.0",          # use o IP do Tailscale (100.x.y.z) para expor só na VPN
-    "port": 8765,
+    "port": 8765,               # HTTP (use com 'tailscale serve')
+    "https_port": 8766,         # HTTPS com certificado próprio (rede local; libera o microfone)
     "token": None,              # gerado no primeiro start
     "require_confirm": ["shell", "kill", "agent"],  # ações que pedem confirmação no celular
     "screen_fps": 4,

@@ -59,7 +59,7 @@ Para ver o link e o QR code do celular a qualquer momento:
 
 **2. Conectar o celular**
 
-- **Na mesma rede Wi-Fi:** escaneie com o celular o QR code mostrado pelo `ponte.link`.
+- **Na mesma rede Wi-Fi:** escaneie com o celular o QR code mostrado pelo `ponte.link`. Ele abre `https://IP-DO-PC:8766`. Na primeira vez o navegador avisa *"Sua conexão não é particular"*, porque o certificado é gerado pelo próprio PC: toque em **Avançado → Continuar** e permita o microfone.
 - **Pela internet, de qualquer lugar:** instale o [Tailscale](https://tailscale.com/download) no PC e no celular, com a mesma conta. Depois rode no PC:
   ```bash
   tailscale serve --bg 8765

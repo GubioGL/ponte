@@ -186,10 +186,14 @@ def _local_ips() -> list[str]:
 
 def print_link():
     """Mostra o link (com token) e o QR code para abrir no celular."""
-    urls = [f"http://{ip}:{CFG['port']}/#token={CFG['token']}" for ip in _local_ips()] or \
-           [f"http://<IP-DO-PC>:{CFG['port']}/#token={CFG['token']}"]
+    port = CFG["https_port"] if CFG.get("https_port") else CFG["port"]
+    scheme = "https" if CFG.get("https_port") else "http"
+    urls = [f"{scheme}://{ip}:{port}/#token={CFG['token']}" for ip in _local_ips()] or \
+           [f"{scheme}://<IP-DO-PC>:{port}/#token={CFG['token']}"]
     for u in urls:
         print("  Abra no celular:", u)
+    if scheme == "https":
+        print("  (1a vez: o navegador avisa 'conexao nao particular' -> Avancado -> Continuar)")
     try:
         import qrcode
         qr = qrcode.QRCode(border=1)
@@ -209,8 +213,19 @@ def main():
         log = open(config.HOME / "ponte.log", "a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stderr = log
     print("\n=== PONTE rodando ===")
+    servers = [uvicorn.Server(uvicorn.Config(app, host=CFG["host"], port=CFG["port"], log_level="warning"))]
+    if CFG.get("https_port"):
+        # HTTPS para a rede local: o microfone do navegador exige página segura
+        from .certs import ensure_cert
+        cert, key = ensure_cert(config.HOME, _local_ips())
+        servers.append(uvicorn.Server(uvicorn.Config(app, host=CFG["host"], port=CFG["https_port"],
+                                                     ssl_certfile=str(cert), ssl_keyfile=str(key),
+                                                     log_level="warning")))
     print_link()
-    uvicorn.run(app, host=CFG["host"], port=CFG["port"], log_level="warning")
+
+    async def run_all():
+        await asyncio.gather(*(s.serve() for s in servers))
+    asyncio.run(run_all())
 
 
 if __name__ == "__main__":

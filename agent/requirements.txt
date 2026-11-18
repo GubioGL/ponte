@@ -8,3 +8,4 @@ psutil>=5.9
 pyperclip>=1.9
 anthropic>=1.0
 qrcode>=7.4
+cryptography>=42

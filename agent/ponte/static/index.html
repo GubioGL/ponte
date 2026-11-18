@@ -154,8 +154,17 @@ if (SR) {
   const rec = new SR(); rec.lang = "pt-BR"; rec.interimResults = false;
   rec.onresult = e => sendVoice(e.results[0][0].transcript);
   rec.onend = () => $("#mic").classList.remove("rec");
-  rec.onerror = e => log("voz: " + e.error, "e");
-  $("#mic").onclick = () => { $("#mic").classList.add("rec"); rec.start(); };
+  rec.onerror = e => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      if (!window.isSecureContext) {
+        const https = `https://${location.hostname}:8766/`;
+        log(`Microfone bloqueado: esta página não é HTTPS. Abra ${https} (Avançado → Continuar) ou use o microfone do teclado no campo abaixo.`, "e");
+      } else {
+        log("Microfone bloqueado: permita o microfone para este site (cadeado ao lado do endereço → Permissões → Microfone).", "e");
+      }
+    } else log("voz: " + e.error, "e");
+  };
+  $("#mic").onclick = () => { $("#mic").classList.add("rec"); try { rec.start(); } catch (err) { log("voz: " + err.message, "e"); } };
 } else {
   $("#micHint").textContent = "Reconhecimento de voz do navegador indisponível (precisa de HTTPS). Use o microfone do teclado no campo abaixo.";
   $("#mic").onclick = () => $("#cmd").focus();
