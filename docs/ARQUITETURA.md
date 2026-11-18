@@ -43,8 +43,8 @@ Não vale reescrever o que já está pronto. Cada camada do Ponte tem um projeto
 1. Você fala no celular. O navegador converte a fala em texto (`pt-BR`).
 2. O texto vai para o PC por `{"type":"voice","text":"..."}`.
 3. `intents.py` tenta uma regra. Se uma regra casar, a ação roda na hora (menos de 100 ms, sem custo).
-4. Se nenhuma regra casar, ou se a frase tiver vários passos, o texto vai para o **agente de IA**. O agente tira um screenshot, decide a próxima ação (clicar, digitar, atalho, shell) e repete até terminar. Cada passo aparece ao vivo no celular.
-5. Ações perigosas (`shell`, `kill`, `agent`) só rodam depois que você confirma no celular.
+4. Se nenhuma regra casar, o texto vai para o **LLM** (`planner.py`). O padrão é o Ollama local e grátis. O LLM recebe as ferramentas (`run_command`, `open_target`, `type_text`, `hotkey`...). Se uma servir, ele usa. Se não, **escreve um comando PowerShell/bash**, o celular mostra o comando com uma explicação, e ele só roda depois da sua confirmação. O LLM lê a saída, corrige se der erro e responde com um resumo, que o celular fala em voz alta.
+5. Ações diretas perigosas (`shell`, `kill`) também pedem confirmação.
 
 ## 3. Segurança (leia antes de expor à internet)
 

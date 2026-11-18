@@ -8,7 +8,7 @@
 
 O Ponte é um framework aberto que liga o seu celular ao seu PC. Um programa fica rodando em segundo plano no computador e pode fazer quase tudo que você faria sentado na frente dele: abrir programas, clicar, digitar, ver a tela e rodar comandos. Pelo celular, você manda o que fazer **falando**, tocando na tela ou digitando.
 
-Para pedidos mais complexos ("abre o YouTube e coloca uma música lo-fi"), um **agente de IA** olha a tela do PC e executa os passos sozinho, mostrando no celular o que está fazendo.
+O cérebro é um **LLM grátis que roda no próprio PC** (via Ollama). Você pede qualquer coisa ("quanto espaço livre tem no disco?", "cria uma pasta Projetos na área de trabalho"). Se houver um comando pronto, ele usa. Se não houver, **o LLM escreve um comando** que resolve a tarefa, você confirma no celular e ele executa. O celular é só o controle: quem faz tudo é o PC.
 
 ## ⚙️ Como funciona
 
@@ -17,7 +17,7 @@ Para pedidos mais complexos ("abre o YouTube e coloca uma música lo-fi"), um **
  ┌───────────────────┐   internet segura     ┌───────────────────────────┐
  │ 🎤 fala / digita  │ ───────────────────►  │ Ponte (em segundo plano)  │
  │ 🖥 vê a tela      │ ◄───────────────────  │  • comandos rápidos       │
- │ 🖱 toca = clique  │      (Tailscale)      │  • agente de IA           │
+ │ 🖱 toca = clique  │      (Tailscale)      │  • LLM local (Ollama)     │
  └───────────────────┘                       │  • mouse, teclado, tela   │
                                              └───────────────────────────┘
 ```
@@ -26,9 +26,9 @@ Para pedidos mais complexos ("abre o YouTube e coloca uma música lo-fi"), um **
 2. O celular transforma a fala em texto e envia ao PC.
 3. O Ponte entende o comando e executa:
    - **Comandos simples** rodam na hora: abrir programas, pesquisar, digitar, pausar música, volume, fechar janela, bloquear o PC.
-   - **Pedidos com vários passos** vão para a IA, que vê a tela, clica e digita até terminar.
+   - **Qualquer outro pedido** vai para o **LLM que roda no seu PC**. Ele usa uma ferramenta pronta, se houver uma. Se não houver, **escreve um comando** (PowerShell no Windows) que resolve a tarefa. Depois lê o resultado, corrige se der erro e responde em voz alta no celular.
 4. Na aba **Tela**, você vê o PC ao vivo. Um toque na imagem clica naquele ponto do PC.
-5. Ações perigosas (rodar comandos, fechar programas, usar a IA) **pedem confirmação** no celular antes de rodar.
+5. Todo comando escrito pela IA aparece no celular com a explicação do que faz e **só roda depois que você confirma**.
 
 ## 📦 Como instalar
 
@@ -67,7 +67,7 @@ Para ver o link e o QR code do celular a qualquer momento:
   No celular, abra `https://<nome-do-pc>.<sua-rede>.ts.net` e use o link com o token mostrado pelo `ponte`.
 - No navegador do celular, toque em **"Adicionar à tela inicial"** para usar o Ponte como um aplicativo.
 
-**3. IA (opcional).** Para ativar o agente inteligente, defina a variável `ANTHROPIC_API_KEY` no PC. Sem ela, todo o resto funciona normalmente.
+**3. Cérebro de IA (grátis).** O instalador pergunta se você quer instalar o [Ollama](https://ollama.com), que roda o modelo de IA **no seu próprio PC**: é de graça, funciona sem internet e nada sai do computador. Ele escolhe o modelo pela memória do PC (`qwen3:8b` com 16 GB de RAM, `qwen3:4b` com menos).
 
 ## 🗣 Exemplos de comandos
 
@@ -79,13 +79,30 @@ Para ver o link e o QR code do celular a qualquer momento:
 | "pausar música" / "aumentar volume" | controla a mídia |
 | "fechar janela" / "trocar janela" | Alt+F4 / Alt+Tab |
 | "bloquear o pc" | bloqueia a tela |
-| "abre o YouTube e coloca lo-fi" | 🤖 a IA faz os passos sozinha |
+| "quanto espaço livre tem no disco?" | 🤖 a IA gera o comando, você confirma, ela responde |
+| "cria uma pasta Projetos na área de trabalho" | 🤖 a IA gera o comando e cria a pasta |
+| "quais programas estão gastando mais memória?" | 🤖 lista os processos e responde |
+
+## 🧠 Escolhendo o cérebro (LLM)
+
+Edite a seção `"llm"` em `~/.ponte/config.json` (no Windows: `C:\Users\SEU_USUARIO\.ponte\config.json`) e reinicie o Ponte.
+
+| Opção | Custo | Config |
+|---|---|---|
+| **Ollama, local** (padrão) | grátis, offline | `"provider": "ollama", "model": "qwen3:8b"` |
+| Ollama com visão (a IA enxerga a tela e clica) | grátis, precisa de mais RAM/GPU | `"model": "qwen2.5vl:7b", "vision": true` |
+| **Groq** (nuvem, muito rápido) | plano grátis com limites | `"provider": "openai", "base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile", "api_key_env": "GROQ_API_KEY"` |
+| **Google Gemini** (nuvem) | plano grátis com limites | `"provider": "openai", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-2.5-flash", "api_key_env": "GEMINI_API_KEY"` |
+| LM Studio (local) | grátis | `"provider": "openai", "base_url": "http://localhost:1234/v1", "model": "<modelo carregado>"` |
+| Claude (Anthropic) | pago, o mais capaz | `"provider": "anthropic", "model": "claude-opus-5-5"` + variável `ANTHROPIC_API_KEY` |
+
+Outras opções: `"confirm_commands": false` deixa a IA rodar comandos sem pedir confirmação (**não recomendado**). `"fast_rules": false` manda tudo para a IA, inclusive os comandos simples.
 
 ## 🔒 Segurança
 
 - Cada PC tem uma senha (token) própria, que só o seu celular conhece.
 - Use o Tailscale para acessar pela internet. **Não abra portas no roteador.**
-- Ações perigosas pedem confirmação, e tudo fica registrado em `~/.ponte/audit.log`.
+- Todo comando escrito pela IA aparece no celular e só roda depois que você confirma. Tudo fica registrado em `~/.ponte/audit.log`.
 
 ## 📁 Estrutura
 
@@ -93,7 +110,7 @@ Para ver o link e o QR code do celular a qualquer momento:
 agent/ponte/
   server.py    servidor (conexão com o celular, segurança, transmissão da tela)
   intents.py   comandos de voz em português  ← adicione suas frases aqui
-  planner.py   agente de IA
+  planner.py   cérebro: LLM (Ollama, APIs compatíveis com OpenAI, Claude) que decide e gera comandos
   tools.py     tela, mouse, teclado, programas, terminal
   static/      aplicativo do celular
 scripts/       instaladores
